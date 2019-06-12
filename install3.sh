@@ -51,21 +51,21 @@
     	cd $HOME
 		sudo pacman --noconfirm --needed -S git wget
 		git clone https://github.com/ag-archlinux/arch-dwm
+
+		git clone https://git.suckless.org/dmenu
+		git clone https://git.suckless.org/st
+		git clone https://git.suckless.org/surf
 		
+		cd $HOME/dmenu/ && sudo make clean install
+		cd $HOME/st/   && sudo make clean install
+		cd $HOME/surf/ && sudo make clean install
 		if [ "$DM" = "dwm" ] ;then
-			git clone https://git.suckless.org/dwm
-			git clone https://git.suckless.org/dmenu
-			git clone https://git.suckless.org/st
-			git clone https://git.suckless.org/surf
-		
-			cd $HOME/dwm/   && sudo make clean install
-			cd $HOME/dmenu/ && sudo make clean install
-			cd $HOME/st/   && sudo make clean install
-			cd $HOME/surf/ && sudo make clean install
 			cd $HOME
+			git clone https://git.suckless.org/dwm	
+			cd $HOME/dwm/   && sudo make clean install
 		fi
 		if [ "$DM" = "bspwm" ]; then
-			sudo pacman --noconfirm --needed -S bspwm sxhkd dmenu
+			sudo pacman --noconfirm --needed -S bspwm sxhkd
 		fi
 	##### e) copy my config files
 		  ## .xinitrc
