@@ -28,9 +28,9 @@
 		sudo makepkg -si
 		cd $HOME
 	##### c) another programs
-		sudo pacman --noconfirm --needed -S filezilla gimp inkscape firefox neovim rxvt-unicode zip unrar unzip ranger htop
+		sudo pacman --noconfirm --needed -S filezilla gimp inkscape firefox neovim rxvt-unicode zip unrar unzip ranger htop libreoffice
 		sudo pacman --noconfirm --needed -S scrot w3m lynx atool highlight xclip mupdf mplayer transmission-cli openssh
-		sudo pacman --noconfirm --needed -S ncmpcpp wget zathura conky 
+		sudo pacman --noconfirm --needed -S ncmpcpp wget zathura zathura-pdf-poppler 2conky 
 		sudo pacman --noconfirm --needed -S nitrogen compton youtube-dl sxiv entr feh sxiv
 		sudo pacman --noconfirm --needed -S gimp kodi qrencode netcat feh mediainfo
 		sudo pacman --noconfirm --needed -S termbin neomutt urlview expac hwinfo reflector
@@ -54,6 +54,7 @@
 
 		git clone https://git.suckless.org/dmenu
 		git clone https://git.suckless.org/st
+		sudo pacman --noconfirm --needed -S gcr webkit2gtk
 		git clone https://git.suckless.org/surf
 		
 		cd $HOME/dmenu/ && sudo make clean install
