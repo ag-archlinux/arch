@@ -1,0 +1,200 @@
+# ##### UIFI,LVM,ENCRYPTED INSTALLATION OF ARCH LINUX ##### #
+
+#### a)	Set the keyboard layout
+        
+        loadkeys us
+
+#### b) Verify the boot mode
+        
+        if [-d "/sys/firmware/efi/efivars"]; then
+            echo "UEFI"
+            BOOT="UEFI"
+        else
+            echo "BIOS"
+            BOOT="BIOS"
+        fi
+
+#### c)	Connect to the Internet
+
+    	ping -q -w1 -c1 google.com &>/dev/null && CONN="CONNECTED" || (CONN="NOT_CONNECTED";)
+        while [ "$CONN" != "CONNECTED" ]; do
+            echo -e "\033[0;36m'You are not connected to the internet!'\033[0;0m"
+            ip addr show
+            wifi-menu
+            ping -q -w1 -c1 duckduckgo.com &>/dev/null && CONN="CONNECTED" || CONN="NOT_CONNECTED"
+        done
+        echo "You are connected to the internet!"
+
+#### d)	Update the system clock and database
+
+        timedatectl set-ntp true
+        pacman --noconfirm --needed -Syyy
+
+#### e) Partition the disks
+	
+		fdisk -l
+			cat<<EOF | fdisk /dev/sda
+				g
+				n
+
+
+				+300M
+				n
+
+
+				+400M
+				n
+
+
+
+				t
+				3
+				31
+				p
+				w
+EOF
+
+#### f) Format the partitions & Mount the file systems
+
+mkfs.fat -F32 /dev/sda1
+mkfs.ext4 /dev/sda2
+cryptsetup luksFormat /dev/sda3
+#YES
+#(passphrase)
+#(passphrase)
+cryptsetup open --type luks /dev/sda3 lvm
+#(passphrase)
+pvcreate --dataalignment 1m /dev/mapper/lvm
+vgcreate volgroup0 /dev/mapper/lvm
+lvcreate -L 30GB volgroup0 -n lv_root
+lvcreate -L 250GB volgroup0 -n lv_home
+modprobe dm_mod
+vgscan
+vgchange -ay
+mkfs.ext4 /dev/volgroup0/lv_root
+mkfs.ext4 /dev/volgroup0/lv_home
+mount /dev/volgroup0/lv_root /mnt
+mkdir /mnt/boot
+mkdir /mnt/home
+mount /dev/sda2 /mnt/boot
+mount /dev/volgroup0/lv_home /mnt/home
+mkdir /mnt/etc
+
+#### a) Select the mirrors
+
+	    cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
+		curl -s "https://www.archlinux.org/mirrorlist/?country=SK&country=CZ&protocol=https&use_mirror_status=on" | sed -e 's/^#Server/Server/' -e '/^#/d' > /etc/pacman.d/mirrorlist
+
+#### b)	Fstab
+
+		genfstab -U -p /mnt >> /mnt/etc/fstab
+
+#### c) Install the base packages
+
+		pacstrap -i /mnt base
+
+#### d) Chroot
+
+arch-chroot /mnt /bin/bash <<EOF
+		
+		#### 1) Time zone
+				TIMEZONE="Europe/Bratislava"
+    			ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
+    			hwclock-systohc
+
+    	#### 2) Locale
+				LOCALE="en_US.UTF-8 UTF-8"
+				sed -i  '/$LOCALE/s/^#//g' /etc/locale.gen
+				locale-gen
+
+    	#### 3) Hostname
+    			HOSTNAME="arch"
+    			echo $HOSTNAME >> /etc/hostname
+				echo "127.0.0.1  localhost" >> /etc/hosts
+				echo "::1        localhost" >> /etc/hosts
+				echo "127.0.0.1  " + $HOSTNAME+ ".localdomain "+ $HOSTNAME >> /etc/hosts
+
+    	#### 4) Installation of packages & network configuration
+				pacman --noconfirm --needed -S base-devel grub efibootmgr dosfstools os-prober mtools linux-headers linux-lts linux-lts-headers networkmanager wireless_tools wpa_supplicant
+				systemctl enable NetworkManager
+				systemctl start NetworkManager
+				
+		#### 5) Initramfs
+				tail /etc/mkinitcpio.conf | awk '/HOOKS/' | sed -i 's/\<block\>/& encrypt lvm2/' /etc/mkinitcpio.conf
+				mkinitcpio -p linux
+				mkinitcpio -p linux-lts
+
+		#### 6) Root password
+				passwd
+				#(root_password)
+				#(root_password)
+				
+		#### 7) Create user & password of user
+				useradd -m -g users -G wheel ag
+				passwd ag
+				#(user_password)
+				#(user_password)
+
+		#### 8) Sudo permitions of user
+				pacman  --noconfirm --needed-S sudo vim
+				sed -i "/#MY_PERMISSION/d" /etc/sudoers
+				echo -e "%wheel ALL=(ALL) ALL #MY_PERMISSION" >> /etc/sudoers
+
+		##### 9) Boot loader
+				sed -i  '/GRUB_ENABLE_CRYPTODISK=y/s/^#//g' /etc/default/grub
+				L=$(grep -n 'GRUB_CMDLINE_LINUX_DEFAULT' test.conf | cut -c 1) && sed -i '/GRUB_CMDLINE_LINUX_DEFAULT/d' test.conf && sed -i $L'i GRUB_CMDLINE_LINUX_DEFAULT="cryptdevice=/dev/sda3:volgroup0:allow-discards quiet"' test.conf
+				mkdir /boot/EFI
+				mount /dev/sda1 /boot/EFI
+				grub-install --target=x86_64-efi --bootloader-id=grub_uefi --recheck
+				mkdir /boot/grub/locale (if needed)
+				cp /usr/share/locale/en\@quot/LC_MESSAGES/grub.mo /boot/grub/locale/en.mo
+				grub-mkconfig -o /boot/grub/grub.cfg
+
+		####10) Swapfile
+				fallocate -l 2G /swapfile
+				chmod 600 /swapfile
+				mkswap /swapfile
+				echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+				cat /etc/fstab
+		##### Exit chroot
+		exit
+EOF
+
+#### e) Unmount all the partitions
+
+		umount -a
+
+#### f) Install system apps & drivers
+
+		pacman --noconfirm --needed -Syyy
+		pacman --noconfirm --needed -S xorg-server
+				DRIVER=$(lspci | awk '/VGA/ {print $5}')
+		if [ "$DRIVER" = "Intel" ]; then
+			pacman --noconfirm --needed -S xf86-video-intel libgl mesa
+		else if [ "$DRIVER" = "NVIDEA" ]; then
+			pacman --noconfirm --needed -S nvidia nvidia-lts nvidia-libgl mesa
+		else if [ "$DRIVER" = "Advanced" ]; then
+			pacman --noconfirm --needed -S mesa xf86-video-amdgpu
+		else if [ "$DRIVER" = "VMware" ]; then
+			pacman --noconfirm --needed -S virtualbox-guest-utils virtualbox-guest-modules-arch mesa mesa-libgl
+		else
+			pacman --noconfirm --needed -S xf86-video-intel libgl mesa nvidia nvidia-lts nvidia-libgl mesa mesa xf86-video-amdgpu virtualbox-guest-utils virtualbox-guest-modules-arch mesa mesa-libgl
+		fi
+		sudo pacman --noconfirm --needed -S bspwm sxhkd xdo bash-completion git wget
+
+		  		  # sound
+				sudo pacman --noconfirm --needed -S pulseaudio pulseaudio-alsa pavucontrol alsa-utils alsa-plugins alsa-lib alsa-firmware gstreamer gst-plugins-good gst-plugins-bad gst-plugins-base gst-plugins-ugly volumeicon playerctl
+				  # bluetooth
+				sudo pacman -S --noconfirm --needed pulseaudio-bluetooth bluez bluez-libs bluez-utils blueberry
+				  # printers
+				sudo pacman --noconfirm --needed -S ghostscript gsfonts gutenprint gtk3-print-backends libcups hplip system-config-printer
+				  # fonts
+				sudo pacman --noconfirm --needed -S adobe-source-sans-pro-fonts cantarell-fonts noto-fonts terminus-font ttf-bitstream-vera ttf-dejavu ttf-droid ttf-inconsolata ttf-liberation ttf-roboto ttf-ubuntu-font-family tamsyn-font
+
+
+#### g) Update & restart the machine
+
+		sudo pacman --noconfirm --needed -Syu
+		reboot
+
+# ##### --------------------------------------------- ##### #
