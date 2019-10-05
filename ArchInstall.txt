@@ -1,3 +1,5 @@
+#!/bin/sh
+
 # ##### UIFI,LVM,ENCRYPTED INSTALLATION OF ARCH LINUX ##### #
 
 #### a)	Set the keyboard layout
@@ -60,10 +62,10 @@ mkfs.fat -F32 /dev/sda1
 mkfs.ext4 /dev/sda2
 cryptsetup luksFormat /dev/sda3
 #YES
-#(passphrase)
-#(passphrase)
+##passphrase
+##passphrase
 cryptsetup open --type luks /dev/sda3 lvm
-#(passphrase)
+##passphrase
 pvcreate --dataalignment 1m /dev/mapper/lvm
 vgcreate volgroup0 /dev/mapper/lvm
 lvcreate -L 30GB volgroup0 -n lv_root
@@ -125,18 +127,20 @@ arch-chroot /mnt /bin/bash <<EOF
 				mkinitcpio -p linux-lts
 
 		#### 6) Root password
+                                read -p "passwd"
 				passwd
-				#(root_password)
-				#(root_password)
+                                read -p "end-passwd"
+				##root_password
+				##root_password
 				
 		#### 7) Create user & password of user
 				useradd -m -g users -G wheel ag
 				passwd ag
-				#(user_password)
-				#(user_password)
+				##user_password
+				##user_password
 
 		#### 8) Sudo permitions of user
-				pacman  --noconfirm --needed-S sudo vim
+				pacman  --noconfirm --needed -S sudo vim
 				sed -i "/#MY_PERMISSION/d" /etc/sudoers
 				echo -e "%wheel ALL=(ALL) ALL #MY_PERMISSION" >> /etc/sudoers
 
